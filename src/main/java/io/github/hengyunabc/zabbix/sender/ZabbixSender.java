@@ -9,7 +9,6 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.Charset;
-import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.List;
 import java.util.logging.Level;
@@ -33,18 +32,27 @@ public class ZabbixSender {
 	int connectTimeout = 3 * 1000;
 	int socketTimeout = 3 * 1000;
 
-	private boolean isTlsNeeded;
-	private CertificateStorage certificateStorage;
+	private Socket socket;
 
 	public ZabbixSender(String host, int port) {
 		this.host = host;
 		this.port = port;
 	}
 
+	public ZabbixSender(String host, int port, Socket socket) {
+		this(host, port);
+		this.socket = socket;
+	}
+
 	public ZabbixSender(String host, int port, int connectTimeout, int socketTimeout) {
 		this(host, port);
 		this.connectTimeout = connectTimeout;
 		this.socketTimeout = socketTimeout;
+	}
+
+	public ZabbixSender(String host, int port, int connectTimeout, int socketTimeout, Socket socket) {
+		this(host, port, connectTimeout, socketTimeout);
+		this.socket = socket;
 	}
 
 	public SenderResult send(DataObject dataObject) throws IOException {
@@ -76,17 +84,14 @@ public class ZabbixSender {
 	 * @throws IOException
 	 */
 	public SenderResult send(List<DataObject> dataObjectList, long clock) throws IOException {
+		logger.log(Level.INFO, "Trying to send data to Zabbix");
 		SenderResult senderResult = new SenderResult();
 
 		Socket socket = null;
 		InputStream inputStream = null;
 		OutputStream outputStream = null;
 		try {
-			if (isTlsNeeded) {
-				socket = SocketFactory.createSSLSocket(certificateStorage);
-			} else {
-				socket = SocketFactory.createSocket();
-			}
+			socket = getSocket();
 
 			socket.setSoTimeout(socketTimeout);
 			socket.connect(new InetSocketAddress(host, port), connectTimeout);
@@ -135,8 +140,6 @@ public class ZabbixSender {
 			senderResult.setTotal(Integer.parseInt(split[3]));
 			senderResult.setSpentSeconds(Float.parseFloat(split[4]));
 
-		} catch (GeneralSecurityException e) {
-			logger.log(Level.SEVERE, "Unable to create SSLSocket due to: " + e.getMessage());
 		} finally {
 			if (socket != null) {
 				socket.close();
@@ -184,19 +187,11 @@ public class ZabbixSender {
 		this.socketTimeout = socketTimeout;
 	}
 
-	public boolean isTlsNeeded() {
-		return isTlsNeeded;
+	protected Socket getSocket() {
+		return socket == null ? new Socket() : socket;
 	}
 
-	public void setTlsNeeded(boolean tlsNeeded) {
-		isTlsNeeded = tlsNeeded;
-	}
-
-	public CertificateStorage getCertificateStorage() {
-		return certificateStorage;
-	}
-
-	public void setCertificateStorage(CertificateStorage certificateStorage) {
-		this.certificateStorage = certificateStorage;
+	public void setSocket(Socket socket) {
+		this.socket = socket;
 	}
 }
