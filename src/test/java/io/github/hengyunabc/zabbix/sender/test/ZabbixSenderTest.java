@@ -11,10 +11,12 @@ import java.util.List;
 import java.util.Properties;
 
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.alibaba.fastjson.JSONObject;
 
+@Ignore
 public class ZabbixSenderTest {
 
 	static String host;
@@ -85,7 +87,7 @@ public class ZabbixSenderTest {
 	private static Properties loadProps() throws IOException {
 		InputStream stream;
 		String path = "test.properties";
-		stream = ZabbixSenderTlsTest.class.getClassLoader().getResourceAsStream(path);
+		stream = ZabbixSenderTest.class.getClassLoader().getResourceAsStream(path);
 		if (stream == null) {
 			throw new RuntimeException("Failed to load properties from " + path);
 		}

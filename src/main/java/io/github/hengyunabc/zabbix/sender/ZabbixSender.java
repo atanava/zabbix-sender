@@ -3,6 +3,7 @@ package io.github.hengyunabc.zabbix.sender;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 
+import javax.net.ssl.SSLSocket;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -35,24 +36,23 @@ public class ZabbixSender {
 	private Socket socket;
 
 	public ZabbixSender(String host, int port) {
-		this.host = host;
-		this.port = port;
+		this(host, port, null);
 	}
 
 	public ZabbixSender(String host, int port, Socket socket) {
-		this(host, port);
+		this.host = host;
+		this.port = port;
 		this.socket = socket;
 	}
 
 	public ZabbixSender(String host, int port, int connectTimeout, int socketTimeout) {
-		this(host, port);
-		this.connectTimeout = connectTimeout;
-		this.socketTimeout = socketTimeout;
+		this(host, port, connectTimeout, socketTimeout, null);
 	}
 
 	public ZabbixSender(String host, int port, int connectTimeout, int socketTimeout, Socket socket) {
-		this(host, port, connectTimeout, socketTimeout);
-		this.socket = socket;
+		this(host, port, socket);
+		this.connectTimeout = connectTimeout;
+		this.socketTimeout = socketTimeout;
 	}
 
 	public SenderResult send(DataObject dataObject) throws IOException {
@@ -87,17 +87,15 @@ public class ZabbixSender {
 		logger.log(Level.INFO, "Trying to send data to Zabbix");
 		SenderResult senderResult = new SenderResult();
 
-		Socket socket = null;
-		InputStream inputStream = null;
-		OutputStream outputStream = null;
 		try {
-			socket = getSocket();
-
+			if (socket == null) {
+				socket = new Socket();
+			}
 			socket.setSoTimeout(socketTimeout);
 			socket.connect(new InetSocketAddress(host, port), connectTimeout);
 
-			inputStream = socket.getInputStream();
-			outputStream = socket.getOutputStream();
+			InputStream inputStream = socket.getInputStream();
+			OutputStream outputStream = socket.getOutputStream();
 
 			SenderRequest senderRequest = new SenderRequest();
 			senderRequest.setData(dataObjectList);
@@ -140,15 +138,13 @@ public class ZabbixSender {
 			senderResult.setTotal(Integer.parseInt(split[3]));
 			senderResult.setSpentSeconds(Float.parseFloat(split[4]));
 
-		} finally {
+		}  finally {
 			if (socket != null) {
+				if (socket instanceof SSLSocket) {
+					((SSLSocket) socket).getSession().invalidate();
+				}
 				socket.close();
-			}
-			if (inputStream != null) {
-				inputStream.close();
-			}
-			if (outputStream != null) {
-				outputStream.close();
+				socket = null;
 			}
 		}
 
@@ -187,8 +183,8 @@ public class ZabbixSender {
 		this.socketTimeout = socketTimeout;
 	}
 
-	protected Socket getSocket() {
-		return socket == null ? new Socket() : socket;
+	public Socket getSocket() {
+		return socket;
 	}
 
 	public void setSocket(Socket socket) {

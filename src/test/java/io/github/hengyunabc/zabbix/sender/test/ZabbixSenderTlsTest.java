@@ -15,6 +15,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
 
+import static org.junit.Assert.*;
+
 public class ZabbixSenderTlsTest {
 
     static String host;
@@ -62,18 +64,12 @@ public class ZabbixSenderTlsTest {
 
         dataObject.setValue(data.toJSONString());
         dataObject.setClock(System.currentTimeMillis()/1000);
-        SenderResult result = zabbixSender.send(dataObject);
 
-        System.out.println("result:" + result);
-        if (result.success()) {
-            System.out.println("send success.");
-        } else {
-            System.err.println("send fail!");
-        }
+        assertResultIsSuccess(zabbixSender.send(dataObject));
     }
 
     @Test
-    public void sendMultipleItems() throws IOException, GeneralSecurityException {
+    public void sendMultipleObjects() throws IOException, GeneralSecurityException {
         Socket socket = SocketFactory.createSSLSocket(new CertificateStorage(keyStore, keyStorePassword));
         ZabbixSender zabbixSender = new ZabbixSender(host, port, socket);
 
@@ -85,28 +81,19 @@ public class ZabbixSenderTlsTest {
             JSONObject object = new JSONObject();
             object.put("send-multiple-objects-test", String.format("Object %d of %d", i + 1, 3));
             String jsonString = object.toJSONString();
-            System.out.println("trying to send: " + jsonString);
             dataObject.setValue(jsonString);
             dataObject.setClock(System.currentTimeMillis()/1000);
             objects.add(dataObject);
         }
-        SenderResult result = zabbixSender.send(objects);
-
-        System.out.println("result:" + result);
-        if (result.success()) {
-            System.out.println("send success.");
-        } else {
-            System.err.println("send fail!");
-        }
-
+        assertResultIsSuccess(zabbixSender.send(objects));
     }
 
     /**
-     * Set VM params in CLI to run this test:
-     * -Djavax.net.ssl.keyStore=<path to keystore>
-     * -Djavax.net.ssl.keyStorePassword=<keystore password>
-     * -Djavax.net.ssl.trustStore=<path to trustStore>
-     * -Djavax.net.ssl.trustStorePassword=<trustStore password>
+     * Pass VM params to CLI to run this test:
+         -Djavax.net.ssl.keyStore=<path to keystore>
+         -Djavax.net.ssl.keyStorePassword=<keystore password>
+         -Djavax.net.ssl.trustStore=<path to trustStore>
+         -Djavax.net.ssl.trustStorePassword=<trustStore password>
      * */
     @Ignore
     @Test
@@ -114,19 +101,7 @@ public class ZabbixSenderTlsTest {
         Socket socket = SocketFactory.createSSLSocket(null);
         ZabbixSender zabbixSender = new ZabbixSender(host, port, socket);
 
-        DataObject dataObject = new DataObject();
-        dataObject.setHost(webserverHost);
-        dataObject.setKey(key);
-        dataObject.setClock(System.currentTimeMillis()/1000);
-        dataObject.setValue("cert-from-cli-vm-params-test");
-        SenderResult result = zabbixSender.send(dataObject);
-
-        System.out.println("result:" + result);
-        if (result.success()) {
-            System.out.println("send success.");
-        } else {
-            System.err.println("send fail!");
-        }
+        assertResultIsSuccess(sendData("cert-from-cli-vm-params-test", zabbixSender));
     }
 
     @Test
@@ -134,19 +109,7 @@ public class ZabbixSenderTlsTest {
         Socket socket = SocketFactory.createSSLSocket(new CertificateStorage(keyStore, keyStorePassword));
         ZabbixSender zabbixSender = new ZabbixSender(host, port, socket);
 
-        DataObject dataObject = new DataObject();
-        dataObject.setHost(webserverHost);
-        dataObject.setKey(key);
-        dataObject.setClock(System.currentTimeMillis()/1000);
-        dataObject.setValue("cert-from-path-test");
-        SenderResult result = zabbixSender.send(dataObject);
-
-        System.out.println("result:" + result);
-        if (result.success()) {
-            System.out.println("send success.");
-        } else {
-            System.err.println("send fail!");
-        }
+        assertResultIsSuccess(sendData("cert-from-path-test", zabbixSender));
     }
 
     @Test
@@ -154,19 +117,61 @@ public class ZabbixSenderTlsTest {
         Socket socket = SocketFactory.createSSLSocket(new CertificateStorage(keyStore, keyStorePassword, trustStore, trustStorePassword));
         ZabbixSender zabbixSender = new ZabbixSender(host, port, socket);
 
+        assertResultIsSuccess(sendData("cert-from-path-overwrite-sys-props-test", zabbixSender));
+    }
+
+    @Test
+    public void sendWithKeyStore_FromPathMultipleTimes() throws InterruptedException {
+        sendMultipleTimes("cert-from-path-send-multiple-times-test", new CertificateStorage(keyStore, keyStorePassword));
+    }
+
+    @Test
+    public void sendWithKeyStore_FromPathOverwriteSysPropsMultipleTimes() throws InterruptedException {
+        sendMultipleTimes("cert-from-path-overwrite-sys-props-send-multiple-times-test",
+                new CertificateStorage(keyStore, keyStorePassword, trustStore, trustStorePassword));
+    }
+
+    private void sendMultipleTimes(final String data, final CertificateStorage cert) throws InterruptedException {
+        Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                do {
+                    try {
+                        Socket socket = SocketFactory.createSSLSocket(cert);
+                        ZabbixSender zabbixSender = new ZabbixSender(host, port, socket);
+                        Thread.sleep(500L);
+                        assertResultIsSuccess(sendData(data, zabbixSender));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                        break;
+                    } catch (GeneralSecurityException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                while ( ! Thread.currentThread().isInterrupted());
+            }
+        };
+
+        Thread senderThread = new Thread(runnable);
+        senderThread.start();
+        Thread.sleep(5000L);
+        senderThread.interrupt();
+    }
+
+    private SenderResult sendData(String value, ZabbixSender zabbixSender) throws IOException {
         DataObject dataObject = new DataObject();
         dataObject.setHost(webserverHost);
         dataObject.setKey(key);
         dataObject.setClock(System.currentTimeMillis()/1000);
-        dataObject.setValue("cert-from-path-overwrite-sys-props-test");
-        SenderResult result = zabbixSender.send(dataObject);
+        dataObject.setValue(value);
+        return zabbixSender.send(dataObject);
+    }
 
-        System.out.println("result:" + result);
-        if (result.success()) {
-            System.out.println("send success.");
-        } else {
-            System.err.println("send fail!");
-        }
+    private void assertResultIsSuccess(SenderResult result) {
+        assertTrue("Send fail!", result.success());
+        System.out.println("Send success: " + result);
     }
 
     private static Properties loadProps() throws IOException {
@@ -180,6 +185,5 @@ public class ZabbixSenderTlsTest {
         props.load(stream);
         return props;
     }
-
 
 }
