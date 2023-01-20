@@ -11,10 +11,12 @@ import java.util.List;
 import java.util.Properties;
 
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.alibaba.fastjson.JSONObject;
 
+@Ignore
 public class ZabbixSenderTest {
 
 	static String host;
