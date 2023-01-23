@@ -1,6 +1,6 @@
 package io.github.hengyunabc.zabbix.sender.test;
 
-import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson2.JSONObject;
 import io.github.hengyunabc.zabbix.sender.*;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
