@@ -140,7 +140,7 @@ public class ZabbixSender {
 			senderResult.setTotal(Integer.parseInt(split[3]));
 			senderResult.setSpentSeconds(Float.parseFloat(split[4]));
 
-			logger.debug("Data was sent to Zabbix: " + senderResult);
+			logger.debug("Zabbix response: " + senderResult);
 		}  finally {
 			if (socket != null) {
 				if (socket instanceof SSLSocket) {
