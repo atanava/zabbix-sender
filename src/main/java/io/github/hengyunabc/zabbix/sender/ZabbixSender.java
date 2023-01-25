@@ -2,7 +2,10 @@ package io.github.hengyunabc.zabbix.sender;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import javax.net.SocketFactory;
 import javax.net.ssl.SSLSocket;
 import java.io.IOException;
 import java.io.InputStream;
@@ -10,10 +13,9 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
 /**
@@ -23,36 +25,38 @@ import java.util.regex.Pattern;
  */
 public class ZabbixSender {
 
-	private static final Logger logger = Logger.getLogger(ZabbixSender.class.getName());
+	public static final int DEFAULT_TIMEOUT = 3 * 1000;
+
+	private static final Logger logger = LoggerFactory.getLogger(ZabbixSender.class.getName());
 
     private static final Pattern PATTERN = Pattern.compile("[^0-9\\.]+");
-    private final static Charset UTF8 = Charset.forName("UTF-8");
+    private final static Charset UTF8 = StandardCharsets.UTF_8;
 
-    String host;
-	int port;
-	int connectTimeout = 3 * 1000;
-	int socketTimeout = 3 * 1000;
+    private String host;
+	private int port;
+	private int connectTimeout;
+	private int socketTimeout;
 
-	private Socket socket;
+	private SocketFactory socketFactory;
 
 	public ZabbixSender(String host, int port) {
-		this(host, port, null);
+		this(host, port, SocketFactory.getDefault());
 	}
 
-	public ZabbixSender(String host, int port, Socket socket) {
-		this.host = host;
-		this.port = port;
-		this.socket = socket;
+	public ZabbixSender(String host, int port, SocketFactory socketFactory) {
+		this(host, port, DEFAULT_TIMEOUT, DEFAULT_TIMEOUT, socketFactory);
 	}
 
 	public ZabbixSender(String host, int port, int connectTimeout, int socketTimeout) {
-		this(host, port, connectTimeout, socketTimeout, null);
+		this(host, port, connectTimeout, socketTimeout, SocketFactory.getDefault());
 	}
 
-	public ZabbixSender(String host, int port, int connectTimeout, int socketTimeout, Socket socket) {
-		this(host, port, socket);
+	public ZabbixSender(String host, int port, int connectTimeout, int socketTimeout, SocketFactory socketFactory) {
+		this.host = host;
+		this.port = port;
 		this.connectTimeout = connectTimeout;
 		this.socketTimeout = socketTimeout;
+		this.socketFactory = socketFactory;
 	}
 
 	public SenderResult send(DataObject dataObject) throws IOException {
@@ -84,13 +88,11 @@ public class ZabbixSender {
 	 * @throws IOException
 	 */
 	public SenderResult send(List<DataObject> dataObjectList, long clock) throws IOException {
-		logger.log(Level.INFO, "Trying to send data to Zabbix");
+		logger.debug("Trying to send data to Zabbix");
 		SenderResult senderResult = new SenderResult();
-
+		Socket socket = null;
 		try {
-			if (socket == null) {
-				socket = new Socket();
-			}
+			socket = socketFactory.createSocket();
 			socket.setSoTimeout(socketTimeout);
 			socket.connect(new InetSocketAddress(host, port), connectTimeout);
 
@@ -138,13 +140,13 @@ public class ZabbixSender {
 			senderResult.setTotal(Integer.parseInt(split[3]));
 			senderResult.setSpentSeconds(Float.parseFloat(split[4]));
 
+			logger.debug("Data was sent to Zabbix: " + senderResult);
 		}  finally {
 			if (socket != null) {
 				if (socket instanceof SSLSocket) {
 					((SSLSocket) socket).getSession().invalidate();
 				}
 				socket.close();
-				socket = null;
 			}
 		}
 
@@ -183,11 +185,11 @@ public class ZabbixSender {
 		this.socketTimeout = socketTimeout;
 	}
 
-	public Socket getSocket() {
-		return socket;
+	public SocketFactory getSocketFactory() {
+		return socketFactory;
 	}
 
-	public void setSocket(Socket socket) {
-		this.socket = socket;
+	public void setSocketFactory(SocketFactory socketFactory) {
+		this.socketFactory = socketFactory;
 	}
 }

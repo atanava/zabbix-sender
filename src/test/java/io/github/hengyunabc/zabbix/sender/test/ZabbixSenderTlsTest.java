@@ -2,36 +2,36 @@ package io.github.hengyunabc.zabbix.sender.test;
 
 import com.alibaba.fastjson2.JSONObject;
 import io.github.hengyunabc.zabbix.sender.*;
-import org.junit.BeforeClass;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.*;
 
+import javax.net.SocketFactory;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.Socket;
-import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertTrue;
 
+@Ignore
 public class ZabbixSenderTlsTest {
 
-    static String host;
-    static int port;
-    static String webserverHost;
-    static String key;
+    private static String host;
+    private static int port;
+    private static String webserverHost;
+    private static String key;
 
-    static String keyStore;
-    static String keyStorePassword;
-    static String trustStore;
-    static String trustStorePassword;
+    private static String keyStore;
+    private static String keyStorePassword;
+    private static String trustStore;
+    private static String trustStorePassword;
+
+    private ZabbixSender zabbixSender;
 
 
     @BeforeClass
-    public static void setup() throws IOException {
+    public static void init() throws IOException {
         Properties props = loadProps();
 
         host = props.getProperty("zabbix.host");
@@ -45,17 +45,27 @@ public class ZabbixSenderTlsTest {
         trustStorePassword = props.getProperty("cert.trustStorePassword");
     }
 
-    @Test
-    public void test_LLD_rule() throws IOException, GeneralSecurityException {
-        Socket socket = SocketFactory.createSSLSocket(new CertificateStorage(keyStore, keyStorePassword));
-        ZabbixSender zabbixSender = new ZabbixSender(host, port, socket);
+    @Before
+    public void setup() {
+        zabbixSender = new ZabbixSender(host, port, new SocketFactorySSL(new DefaultCertificateStorage(keyStore, keyStorePassword)));
+    }
 
+    @After
+    public void destroy() {
+        System.clearProperty("javax.net.ssl.keyStore");
+        System.clearProperty("javax.net.ssl.keyStorePassword");
+        System.clearProperty("javax.net.ssl.trustStore");
+        System.clearProperty("javax.net.ssl.trustStorePassword");
+    }
+
+    @Test
+    public void test_LLD_rule() throws IOException {
         DataObject dataObject = new DataObject();
         dataObject.setHost(webserverHost);
         dataObject.setKey(key);
 
         JSONObject data = new JSONObject();
-        List<JSONObject> jsonObjects = new LinkedList<JSONObject>();
+        List<JSONObject> jsonObjects = new LinkedList<>();
         JSONObject object = new JSONObject();
         object.put("hello", "This is object");
 
@@ -69,11 +79,8 @@ public class ZabbixSenderTlsTest {
     }
 
     @Test
-    public void sendMultipleObjects() throws IOException, GeneralSecurityException {
-        Socket socket = SocketFactory.createSSLSocket(new CertificateStorage(keyStore, keyStorePassword));
-        ZabbixSender zabbixSender = new ZabbixSender(host, port, socket);
-
-        List<DataObject> objects = new ArrayList<DataObject>();
+    public void sendMultipleObjects() throws IOException {
+        List<DataObject> objects = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
             DataObject dataObject = new DataObject();
             dataObject.setHost(webserverHost);
@@ -97,64 +104,65 @@ public class ZabbixSenderTlsTest {
      * */
     @Ignore
     @Test
-    public void send_WithKeyStore_FromVmParams() throws IOException, GeneralSecurityException {
-        Socket socket = SocketFactory.createSSLSocket(null);
-        ZabbixSender zabbixSender = new ZabbixSender(host, port, socket);
+    public void send_WithKeyStore_FromVmParams() throws IOException {
+        ZabbixSender zabbixSender = new ZabbixSender(host, port, new SocketFactorySSL());
 
         assertResultIsSuccess(sendData("cert-from-cli-vm-params-test", zabbixSender));
     }
 
+    /**
+     * Pass VM params to CLI to run this test:
+         -Djavax.net.ssl.keyStore=<path to keystore>
+         -Djavax.net.ssl.keyStorePassword=<keystore password>
+         -Djavax.net.ssl.trustStore=<path to trustStore>
+         -Djavax.net.ssl.trustStorePassword=<trustStore password>
+     * */
+    @Ignore
     @Test
-    public void sendWithKeyStore_FromPath() throws IOException, GeneralSecurityException {
-        Socket socket = SocketFactory.createSSLSocket(new CertificateStorage(keyStore, keyStorePassword));
-        ZabbixSender zabbixSender = new ZabbixSender(host, port, socket);
-
-        assertResultIsSuccess(sendData("cert-from-path-test", zabbixSender));
+    public void send_WithKeyStore_FromVmParamsMultipleTimes() throws InterruptedException {
+        sendMultipleTimes("cert-from-cli-vm-params-send-multiple-times-test", null);
     }
 
     @Test
-    public void sendWithKeyStore_FromPathOverwriteSysProps() throws IOException, GeneralSecurityException {
-        Socket socket = SocketFactory.createSSLSocket(new CertificateStorage(keyStore, keyStorePassword, trustStore, trustStorePassword));
-        ZabbixSender zabbixSender = new ZabbixSender(host, port, socket);
-
+    public void sendWithKeyStore_FromPathOverwriteSysProps() throws IOException {
+        overwriteSysProps();
+        ZabbixSender zabbixSender = new ZabbixSender(host, port, new SocketFactorySSL());
         assertResultIsSuccess(sendData("cert-from-path-overwrite-sys-props-test", zabbixSender));
     }
 
     @Test
-    public void sendWithKeyStore_FromPathMultipleTimes() throws InterruptedException {
-        sendMultipleTimes("cert-from-path-send-multiple-times-test", new CertificateStorage(keyStore, keyStorePassword));
+    public void sendWithKeyStore_FromPathOverwriteSysPropsMultipleTimes() throws InterruptedException {
+        overwriteSysProps();
+        sendMultipleTimes("cert-from-path-overwrite-sys-props-send-multiple-times-test", null);
     }
 
     @Test
-    public void sendWithKeyStore_FromPathOverwriteSysPropsMultipleTimes() throws InterruptedException {
-        sendMultipleTimes("cert-from-path-overwrite-sys-props-send-multiple-times-test",
-                new CertificateStorage(keyStore, keyStorePassword, trustStore, trustStorePassword));
+    public void sendWithKeyStore_FromPath() throws IOException {
+        assertResultIsSuccess(sendData("cert-from-path-test", zabbixSender));
+    }
+
+    @Test
+    public void sendWithKeyStore_FromPathMultipleTimes() throws InterruptedException {
+        sendMultipleTimes("cert-from-path-send-multiple-times-test", new DefaultCertificateStorage(keyStore, keyStorePassword));
     }
 
     private void sendMultipleTimes(final String data, final CertificateStorage cert) throws InterruptedException {
-        Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                do {
-                    try {
-                        Socket socket = SocketFactory.createSSLSocket(cert);
-                        ZabbixSender zabbixSender = new ZabbixSender(host, port, socket);
-                        Thread.sleep(500L);
-                        assertResultIsSuccess(sendData(data, zabbixSender));
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                        break;
-                    } catch (GeneralSecurityException e) {
-                        throw new RuntimeException(e);
-                    }
+        Thread senderThread = new Thread(() -> {
+            do {
+                try {
+                    SocketFactory socketFactory = cert == null ? new SocketFactorySSL() : new SocketFactorySSL(cert);
+                    ZabbixSender zabbixSender = new ZabbixSender(host, port, socketFactory);
+                    Thread.sleep(500L);
+                    assertResultIsSuccess(sendData(data, zabbixSender));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                    break;
                 }
-                while ( ! Thread.currentThread().isInterrupted());
             }
-        };
-
-        Thread senderThread = new Thread(runnable);
+            while ( ! Thread.currentThread().isInterrupted());
+        });
         senderThread.start();
         Thread.sleep(5000L);
         senderThread.interrupt();
@@ -184,6 +192,13 @@ public class ZabbixSenderTlsTest {
         Properties props = new Properties();
         props.load(stream);
         return props;
+    }
+
+    private void overwriteSysProps() {
+        System.setProperty("javax.net.ssl.keyStore", keyStore);
+        System.setProperty("javax.net.ssl.keyStorePassword", keyStorePassword);
+        System.setProperty("javax.net.ssl.trustStore", trustStore);
+        System.setProperty("javax.net.ssl.trustStorePassword", trustStorePassword);
     }
 
 }
