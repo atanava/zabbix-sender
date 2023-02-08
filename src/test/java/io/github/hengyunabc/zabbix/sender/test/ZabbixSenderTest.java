@@ -5,25 +5,42 @@ import io.github.hengyunabc.zabbix.sender.SenderResult;
 import io.github.hengyunabc.zabbix.sender.ZabbixSender;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Properties;
 
+import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
-import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson2.JSONObject;
 
+@Ignore
 public class ZabbixSenderTest {
 
-	String host = "127.0.0.1";
-	int port = 49156;
+	static String host;
+	static int port;
+	static String webserverHost;
+	static String key;
+
+	@BeforeClass
+	public static void setup() throws IOException {
+		Properties props = loadProps();
+
+		host = props.getProperty("zabbix.host");
+		port = Integer.parseInt(props.getProperty("zabbix.port"));
+		webserverHost = props.getProperty("zabbix.webserver.host");
+		key = props.getProperty("zabbix.key");
+	}
 
 	@Test
 	public void test_LLD_rule() throws IOException {
 		ZabbixSender zabbixSender = new ZabbixSender(host, port);
 
 		DataObject dataObject = new DataObject();
-		dataObject.setHost("172.17.42.1");
-		dataObject.setKey("healthcheck[dw,notificationserver]");
+		dataObject.setHost(webserverHost);
+		dataObject.setKey(key);
 
 		JSONObject data = new JSONObject();
 		List<JSONObject> aray = new LinkedList<JSONObject>();
@@ -52,8 +69,9 @@ public class ZabbixSenderTest {
 		ZabbixSender zabbixSender = new ZabbixSender(host, port);
 
 		DataObject dataObject = new DataObject();
-		dataObject.setHost("172.17.42.1");
-		dataObject.setKey("a[test, jvm.mem.non-heap.used]");
+		dataObject.setHost(webserverHost);
+		dataObject.setKey(key);
+
 		dataObject.setValue("10");
 		dataObject.setClock(System.currentTimeMillis()/1000);
 		SenderResult result = zabbixSender.send(dataObject);
@@ -64,8 +82,18 @@ public class ZabbixSenderTest {
 		} else {
 			System.err.println("send fail!");
 		}
+	}
 
-
+	private static Properties loadProps() throws IOException {
+		InputStream stream;
+		String path = "test.properties";
+		stream = ZabbixSenderTest.class.getClassLoader().getResourceAsStream(path);
+		if (stream == null) {
+			throw new RuntimeException("Failed to load properties from " + path);
+		}
+		Properties props = new Properties();
+		props.load(stream);
+		return props;
 	}
 
 }
